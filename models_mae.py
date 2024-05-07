@@ -417,6 +417,7 @@ class MaskedAutoencoder(nn.Module):
                 x = x.reshape(B,101,12,D)
                 x = torch.cat([x,x[:,-1,:].unsqueeze(1)],dim=1) # hack
                 x = x.reshape(B,1224,D)
+                
         if self.decoder_mode > 3: # mvit
             x = self.decoder_blocks(x)
         else:

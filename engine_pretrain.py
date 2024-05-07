@@ -14,12 +14,14 @@ from typing import Iterable
 
 import torch
 
+from torchaudio.transforms import MelSpectrogram, Resample
+
 import util.misc as misc
 import util.lr_sched as lr_sched
 
 
 def train_one_epoch(model: torch.nn.Module,
-                    data_loader: Iterable, optimizer: torch.optim.Optimizer,
+                    data_loader: Iterable, optimizer: torch.optim.Optimizer, transform: MelSpectrogram, 
                     device: torch.device, epoch: int, loss_scaler,
                     log_writer=None,
                     args=None):
@@ -42,11 +44,15 @@ def train_one_epoch(model: torch.nn.Module,
         if data_iter_step % accum_iter == 0:
             lr_sched.adjust_learning_rate(optimizer, data_iter_step / len(data_loader) + epoch, args)
 
-
+        # feature transformation
+        samples = transform(torch.tensor(samples['audio']['array']))
 
         #print(samples.shape)# 64x3x224x224 for img, 64x1x512x128 for audio
         samples = samples.to(device, non_blocking=True)
         
+        
+
+
         # comment out when not debugging
         # from fvcore.nn import FlopCountAnalysis, parameter_count_table
         # if data_iter_step == 1:

@@ -16,12 +16,13 @@ import os
 import time
 from pathlib import Path
 
+import torch.nn as nn
 import torch
 import torch.backends.cudnn as cudnn
 from torch.utils.tensorboard import SummaryWriter
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
-from torchaudio.transforms import MelSpectrogram
+from torchaudio.transforms import MelSpectrogram, Resample
 import timm
 
 assert timm.__version__ == "0.3.2"  # version check
@@ -191,7 +192,11 @@ def main(args):
         sample_rate = 16000
         win_length = int(sample_rate * 0.025)  # 25ms
         hop_length = int(sample_rate * 0.01)  # 10ms
-        transform = MelSpectrogram(
+        transform = nn.Sequential(
+            Resample(
+                new_freq=sample_rate
+            ),
+            MelSpectrogram(
                         sample_rate=sample_rate, 
                         win_length=win_length, 
                         hop_length=hop_length, 
@@ -199,11 +204,13 @@ def main(args):
                         n_mels=128, 
                         window_fn=torch.hamming_window
                     )
+        )
+        
         
         # dataset
         if args.dataset == "audioset":
             dataset_train = load_dataset("agkphysics/AudioSet", "unbalanced", trust_remote_code=True)
-            
+
     #print(dataset_train)
 
     if True:  # args.distributed:
@@ -283,7 +290,7 @@ def main(args):
         train_stats = train_one_epoch(
             model, data_loader_train,
             optimizer, device, epoch, loss_scaler,
-            log_writer=log_writer,
+            log_writer=log_writer, transform=transform,
             args=args
         )
         if args.output_dir and (epoch % args.save_every_epoch == 0 or epoch + 1 == args.epochs):
