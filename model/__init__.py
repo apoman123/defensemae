@@ -1,6 +1,6 @@
-import vit
-import conformer
-import swing
+import model.vit as vit
+import model.conformer as conformer
+import model.swing as swing
 
 Block = vit.Block
 ConformerLayer = conformer.ConformerLayer

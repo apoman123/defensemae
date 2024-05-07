@@ -21,7 +21,7 @@ import torch.backends.cudnn as cudnn
 from torch.utils.tensorboard import SummaryWriter
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
-
+from torchaudio.transforms import MelSpectrogram
 import timm
 
 assert timm.__version__ == "0.3.2"  # version check
@@ -186,8 +186,24 @@ def main(args):
                       'std':norm_stats[args.dataset][1],
                       'multilabel':multilabel_dataset[args.dataset],
                       'noise':False}
+        
+        # transformation
+        sample_rate = 16000
+        win_length = int(sample_rate * 0.025)  # 25ms
+        hop_length = int(sample_rate * 0.01)  # 10ms
+        transform = MelSpectrogram(
+                        sample_rate=sample_rate, 
+                        win_length=win_length, 
+                        hop_length=hop_length, 
+                        n_fft=win_length, 
+                        n_mels=128, 
+                        window_fn=torch.hamming_window
+                    )
+        
+        # dataset
         if args.dataset == "audioset":
             dataset_train = load_dataset("agkphysics/AudioSet", "unbalanced", trust_remote_code=True)
+            
     #print(dataset_train)
 
     if True:  # args.distributed:
@@ -252,8 +268,8 @@ def main(args):
         model_without_ddp = model.module
     
     # following timm: set wd as 0 for bias and norm layers
-    param_groups = optim_factory.add_weight_decay(model_without_ddp, args.weight_decay)
-    optimizer = torch.optim.AdamW(param_groups, lr=args.lr, betas=(0.9, 0.95))
+    # param_groups = optim_factory.add_weight_decay(model_without_ddp, args.weight_decay)
+    optimizer = torch.optim.AdamW(model_without_ddp, lr=args.lr, betas=(0.9, 0.95), weight_decay=args.weight_decay)
     print(optimizer)
     loss_scaler = NativeScaler()
 
