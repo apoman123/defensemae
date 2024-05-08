@@ -148,6 +148,12 @@ def get_args_parser():
     parser.set_defaults(norm_pix_loss=True)
     return parser
 
+def collate(batch):
+    wavs = torch.tensor([])
+    for data in batch:
+        wav = torch.from_numpy(data['audio']['array']).reshape(1, -1).float()
+        wavs = torch.cat([wavs, wav], dim=0)
+    return wavs
 
 def main(args):
     misc.init_distributed_mode(args)
@@ -189,11 +195,13 @@ def main(args):
                       'noise':False}
         
         # transformation
+        original_rate = 48000
         sample_rate = 16000
         win_length = int(sample_rate * 0.025)  # 25ms
         hop_length = int(sample_rate * 0.01)  # 10ms
         transform = nn.Sequential(
             Resample(
+                orig_freq=original_rate,
                 new_freq=sample_rate
             ),
             MelSpectrogram(
@@ -235,6 +243,7 @@ def main(args):
         num_workers=args.num_workers,
         pin_memory=args.pin_mem,
         drop_last=True,
+        collate_fn=collate,
     )
     
     # define the model

@@ -18,7 +18,7 @@ from torchaudio.transforms import MelSpectrogram, Resample
 
 import util.misc as misc
 import util.lr_sched as lr_sched
-
+from util.padding import padding
 
 def train_one_epoch(model: torch.nn.Module,
                     data_loader: Iterable, optimizer: torch.optim.Optimizer, transform: MelSpectrogram, 
@@ -38,14 +38,17 @@ def train_one_epoch(model: torch.nn.Module,
     if log_writer is not None:
         print('log_dir: {}'.format(log_writer.log_dir))
 
-    for data_iter_step, samples in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
+    for data_iter_step, wavs in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
 
         # we use a per iteration (instead of per epoch) lr scheduler
         if data_iter_step % accum_iter == 0:
             lr_sched.adjust_learning_rate(optimizer, data_iter_step / len(data_loader) + epoch, args)
 
         # feature transformation
-        samples = transform(torch.tensor(samples['audio']['array']))
+        samples = transform(wavs)
+
+        # padding to specific length
+        samples, padding_mask = padding(samples, model.in_chans, model.embed_dim, model.patch_embed.num_patches, smallest_length=1024)
 
         #print(samples.shape)# 64x3x224x224 for img, 64x1x512x128 for audio
         samples = samples.to(device, non_blocking=True)
@@ -62,7 +65,7 @@ def train_one_epoch(model: torch.nn.Module,
 
 
         with torch.cuda.amp.autocast():
-            loss_a, _, _, _ = model(samples, mask_ratio=args.mask_ratio)
+            loss_a, _, _, _ = model(samples, mask_ratio=args.mask_ratio, padding_mask=padding_mask)
         loss_value = loss_a.item()
         loss_total = loss_a
 
