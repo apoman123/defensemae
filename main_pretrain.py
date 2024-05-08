@@ -25,7 +25,7 @@ import torchvision.datasets as datasets
 from torchaudio.transforms import MelSpectrogram, Resample
 import timm
 
-assert timm.__version__ == "0.3.2"  # version check
+# assert timm.__version__ == "0.3.2"  # version check
 import timm.optim.optim_factory as optim_factory
 
 import util.misc as misc
@@ -110,18 +110,18 @@ def get_args_parser():
     parser.add_argument('--audio_exp', type=bool, default=True, help='audio exp')
     #parser.add_argument("--data_train", type=str, default='/checkpoint/berniehuang/ast/egs/audioset/data/datafiles/train.json', help="training data json")
     #parser.add_argument("--data_eval", type=str, default='/checkpoint/berniehuang/ast/egs/audioset/data/datafiles/eval.json', help="validation data json")
-    parser.add_argument("--data_train", type=str, default='/checkpoint/berniehuang/ast/egs/audioset/data/datafiles/train_video.json', help="training data json")
-    parser.add_argument("--data_eval", type=str, default='/checkpoint/berniehuang/ast/egs/audioset/data/datafiles/eval_video.json', help="validation data json")    
-    parser.add_argument("--label_csv", type=str, default='/checkpoint/berniehuang/ast/egs/audioset/data/class_labels_indices.csv', help="csv with class labels")
+    # parser.add_argument("--data_train", type=str, default='/checkpoint/berniehuang/ast/egs/audioset/data/datafiles/train_video.json', help="training data json")
+    # parser.add_argument("--data_eval", type=str, default='/checkpoint/berniehuang/ast/egs/audioset/data/datafiles/eval_video.json', help="validation data json")    
+    # parser.add_argument("--label_csv", type=str, default='/checkpoint/berniehuang/ast/egs/audioset/data/class_labels_indices.csv', help="csv with class labels")
     parser.add_argument('--freqm', help='frequency mask max length', type=int, default=0) # pretraining 0
     parser.add_argument('--timem', help='time mask max length', type=int, default=0) # pretraining 0
     parser.add_argument("--mixup", type=float, default=0, help="how many (0-1) samples need to be mixup during training")
     parser.add_argument("--dataset", type=str, default="audioset", help="dataset", choices=["audioset", "esc50", "speechcommands"])
-    parser.add_argument("--use_fbank", type=bool, default=False)
-    parser.add_argument("--fbank_dir", type=str, default="/checkpoint/berniehuang/ast/egs/esc50/data/ESC-50-master/fbank", help="fbank dir")
-    parser.add_argument("--alpha", type=float, default=0.0, help="contrastive loss weight")
-    parser.add_argument("--omega", type=float, default=1.0, help="reconstruction loss weight")    
-    parser.add_argument('--mode', default=0, type=int,help='contrastive mode')
+    # parser.add_argument("--use_fbank", type=bool, default=False)
+    # parser.add_argument("--fbank_dir", type=str, default="/checkpoint/berniehuang/ast/egs/esc50/data/ESC-50-master/fbank", help="fbank dir")
+    # parser.add_argument("--alpha", type=float, default=0.0, help="contrastive loss weight")
+    # parser.add_argument("--omega", type=float, default=1.0, help="reconstruction loss weight")    
+    # parser.add_argument('--mode', default=0, type=int,help='contrastive mode')
     parser.add_argument('--save_every_epoch', default=20, type=int,help='save_every_epoch')
     parser.add_argument('--use_custom_patch', type=bool, default=False, help='use custom patch and override timm PatchEmbed')
     #parser.add_argument("--distributed", type=bool, default=True)
@@ -130,7 +130,7 @@ def get_args_parser():
     parser.add_argument('--pos_trainable', type=bool, default=False, help='use trainable pos emb')	
     parser.add_argument('--use_nce', type=bool, default=False, help='use use_nce')
     parser.add_argument('--load_video', type=bool, default=False, help='load video')
-    parser.add_argument('--decoder_type', default="vit", type=int,help='decoder architecture type')
+ 
     # remove for A-MAE
     #parser.add_argument('--v_weight', default=1.0, type=float, help='reconstruction weight for the visual part')
     #parser.add_argument('--video_only', type=bool, default=False, help='video_only pre-training')
