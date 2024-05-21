@@ -1,25 +1,14 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
-# All rights reserved.
-
-# This source code is licensed under the license found in the
-# LICENSE file in the root directory of this source tree.
-# --------------------------------------------------------
-# References:
-# DeiT: https://github.com/facebookresearch/deit
-# BEiT: https://github.com/microsoft/unilm/tree/master/beit
-# --------------------------------------------------------
 import math
 import sys
 from typing import Iterable
 
 import torch
 import torch.nn as nn
-
-from torchaudio.transforms import MelSpectrogram, Resample
+from torch.distributions.gamma import Gamma
 
 import util.misc as misc
 import util.lr_sched as lr_sched
-from util.padding import padding
+from util.variable_length_padding import padding
 
 def train_one_epoch(model: torch.nn.Module,
                     data_loader: Iterable, optimizer: torch.optim.Optimizer, 
@@ -39,7 +28,7 @@ def train_one_epoch(model: torch.nn.Module,
     if log_writer is not None:
         print('log_dir: {}'.format(log_writer.log_dir))
 
-    for data_iter_step, specs in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
+    for data_iter_step, (specs, padding_masks) in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
         # we use a per iteration (instead of per epoch) lr scheduler
         if data_iter_step % accum_iter == 0:
             lr_sched.adjust_learning_rate(optimizer, data_iter_step / len(data_loader) + epoch, args)
@@ -47,11 +36,14 @@ def train_one_epoch(model: torch.nn.Module,
         # feature transformation
         # samples = transform(wavs)
 
-        # padding to specific length
-        samples, padding_masks = padding(specs, model.module.in_chans, model.module.embed_dim, model.module.patch_size, smallest_length=1024)
-
+        # sample a noise with random choosen epsilon by sigma. sigma is from gamma distribution
+        # follow the setting from the paper: Beyond Pretrained Features: Noisy Image Modeling Provides Adversarial Defense
+        sigma = Gamma(torch.tensor(25), torch.tensor(3))
+        noises = torch.randn(specs.shape) * sigma
+        
         #print(samples.shape)# 64x3x224x224 for img, 64x1x512x128 for audio
         samples = samples.to(device, non_blocking=True)
+        noises = noises.to(device, non_blocking=True)
         padding_masks = padding_masks.to(device, non_blocking=True)
         
 
@@ -62,9 +54,16 @@ def train_one_epoch(model: torch.nn.Module,
         #     flops = FlopCountAnalysis(model, samples)
         #     print(flops.total())
         #     print(parameter_count_table(model))
-
         with torch.cuda.amp.autocast():
-            loss_a, _, _ = model(imgs=samples, mask_ratio=args.mask_ratio, padding_mask=padding_masks)
+            if args.finetune_task == "Noisy Spectrogram Modeling" or args.finetune_task == "Masked Noisy Spectrogram Modeling":
+                _, pred, _ = model(imgs=samples+noises, mask_ratio=args.mask_ratio, padding_mask=padding_masks)
+                reconstructed_specs = model.unpatchify(pred)
+                loss_a = torch.mean(reconstructed_specs - samples)
+            elif args.finetune_task == "Speech Enhancement":
+                _, pred, _ = model(imgs=samples+noises, mask_ratio=args.mask_ratio, padding_mask=padding_masks)
+                predicted_noises = model.unpatchify(pred)
+                loss_a = torch.mean(noises - predicted_noises)
+
         loss_value = loss_a.item()
         loss_total = loss_a
 
@@ -101,5 +100,7 @@ def train_one_epoch(model: torch.nn.Module,
     metric_logger.synchronize_between_processes()
     print("Averaged stats:", metric_logger)
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
+
+
 
 

@@ -13,6 +13,6 @@ class PositionalEncoding(nn.Module):
     
     def forward(self, x):
         N, L, D = x.shape
-        x_pos_emb_size = torch.arange(L).expand((N, L))
+        x_pos_emb_size = torch.arange(L).expand((N, L)).to(self.position_encoding.weight.device)
         x = x + self.position_encoding(x_pos_emb_size)
         return x

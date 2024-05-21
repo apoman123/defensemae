@@ -34,7 +34,7 @@ class MaskedAutoencoder(nn.Module):
                  mask_t_prob=0.6, mask_f_prob=0.5, mask_2d=False, no_shift=False, do_mask=True, # do the masking or not
                  maximum_length=4096
                  ):
-        super().__init__()        
+        super(MaskedAutoencoder, self).__init__()        
         self.encoder_type = encoder_type
         self.decoder_type = decoder_type
         self.do_mask=do_mask
@@ -275,7 +275,7 @@ class MaskedAutoencoder(nn.Module):
         specs = x.reshape(shape=(x.shape[0], 1, h * p, w * p))
         return specs
 
-    def random_masking(self, x, mask_ratio):
+    def random_masking(self, x, mask_ratio, padding_mask=None):
         """
         Perform per-sample random masking by per-sample shuffling.
         Per-sample shuffling is done by argsort random noise.
@@ -293,14 +293,15 @@ class MaskedAutoencoder(nn.Module):
         # keep the first subset
         ids_keep = ids_shuffle[:, :len_keep]
         x_masked = torch.gather(x, dim=1, index=ids_keep.unsqueeze(-1).repeat(1, 1, D))
-
+        masked_padding_mask = torch.gather(x, dim=1, index=ids_keep.unsqueeze(-1).repeat(1, 1, D))
+        
         # generate the binary mask: 0 is keep, 1 is remove
         mask = torch.ones([N, L], device=x.device)
         mask[:, :len_keep] = 0
         # unshuffle to get the binary mask
         mask = torch.gather(mask, dim=1, index=ids_restore)
 
-        return x_masked, mask, ids_restore
+        return x_masked, mask, ids_restore, masked_padding_mask
 
     def random_masking_2d(self, x, mask_t_prob, mask_f_prob):
         """
@@ -364,13 +365,18 @@ class MaskedAutoencoder(nn.Module):
         if mask_2d:
             x, mask, ids_restore = self.random_masking_2d(x, mask_t_prob=self.mask_t_prob, mask_f_prob=self.mask_f_prob)
         else:
-            x, mask, ids_restore = self.random_masking(x, mask_ratio)
+            x, mask, ids_restore, padding_mask = self.random_masking(x, mask_ratio, padding_mask)
 
+        if padding_mask != None:
+            N, L, D = padding_mask.shape
+            padding_mask = torch.cat([torch.zeros(N, 1, D).bool().to(padding_mask.device), padding_mask], dim=1)
+                               
         # append cls token
         cls_token = self.cls_token
         cls_tokens = cls_token.expand(x.shape[0], -1, -1)
         x = torch.cat((cls_tokens, x), dim=1)
-
+        
+        
         # add pos embed w/o cls token
         x = self.encoder_pos_embed(x)
 
@@ -465,8 +471,8 @@ class MaskedAutoencoder(nn.Module):
             var = target.var(dim=-1, keepdim=True)
             target = (target - mean) / (var + 1.e-6)**.5
 
-        loss = (pred - target) ** 2
-        loss = loss.mean(dim=-1)  # [N, L], mean loss per patch
+        loss = torch.mean((pred - target) ** 2)
+        # loss = loss.mean(dim=-1)  # [N, L], mean loss per sequence
 
         # loss = (loss * mask).sum() / mask.sum()  # mean loss on removed patches
         return loss      
@@ -479,7 +485,7 @@ class MaskedAutoencoder(nn.Module):
         else:
             encoder_padding_mask = None
             decoder_padding_mask = None
-
+            
         # encode
         if not self.do_mask:
             emb_enc, contextual_emb, ids_restore = self.forward_encoder_no_mask(imgs, padding_mask=encoder_padding_mask)
@@ -491,7 +497,7 @@ class MaskedAutoencoder(nn.Module):
 
         # filter useless values(padded values)
         if padding_mask != None:
-            padding_mask = torch.logical_not(padding_mask).float()
+            padding_mask = padding_mask.float()
             pred = pred * padding_mask[:, :, :self.patch_size**2 * self.in_chans]
 
         # calculate loss

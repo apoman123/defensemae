@@ -23,6 +23,7 @@ class Attention(nn.Module):
         self.head_dim = dim // num_heads
         self.scale = self.head_dim ** -0.5
         self.fused_attn = use_fused_attn()
+        self.dim = dim
 
         self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
         self.q_norm = norm_layer(self.head_dim) if qk_norm else nn.Identity()
@@ -31,13 +32,23 @@ class Attention(nn.Module):
         self.proj = nn.Linear(dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)
 
+    def process_padding_mask(self, padding_mask: torch.Tensor=None) -> torch.Tensor:
+        N, L, D = padding_mask.shape
+        processed_mask = padding_mask.repeat(1, 1, 3).reshape(N, L, 3, self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4)
+        mask_q, mask_k, mask_v = processed_mask.float().unbind(0)
+        attn_padding_mask = mask_q @ mask_k.transpose(-2, -1)
+        return torch.logical_not(attn_padding_mask.bool())
+    
     def forward(self, x: torch.Tensor, padding_mask: torch.Tensor=None) -> torch.Tensor:
         # padding mask 1: pad, 0: valid value 
         B, N, C = x.shape
         qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4)
         q, k, v = qkv.unbind(0)
         q, k = self.q_norm(q), self.k_norm(k)
-
+     
+        if padding_mask != None:
+            padding_mask = self.process_padding_mask(padding_mask)
+            
         if self.fused_attn:
             x = F.scaled_dot_product_attention(
                 q, k, v,
@@ -46,8 +57,11 @@ class Attention(nn.Module):
         else:
             q = q * self.scale
             attn = q @ k.transpose(-2, -1)
+            
+            # mask out the padding part
             if padding_mask != None:
-                attn = torch.masked_fill(padding_mask, -torch.inf)
+                attn = attn.masked_fill(padding_mask, -torch.inf)
+                
             attn = attn.softmax(dim=-1)
             attn = self.attn_drop(attn)
             x = attn @ v

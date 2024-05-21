@@ -12,6 +12,7 @@
 import builtins
 import datetime
 import os
+import sys
 import time
 from collections import defaultdict, deque
 from pathlib import Path
@@ -172,7 +173,6 @@ def setup_for_distributed(is_master):
     This function disables printing when not in master process
     """
     builtin_print = builtins.print
-
     def print(*args, **kwargs):
         force = kwargs.pop('force', False)
         force = force or (get_world_size() > 8)
@@ -180,9 +180,9 @@ def setup_for_distributed(is_master):
             now = datetime.datetime.now().time()
             builtin_print('[{}] '.format(now), end='')  # print with time stamp
             builtin_print(*args, **kwargs)
-
+            
     builtins.print = print
-
+    
 
 def is_dist_avail_and_initialized():
     if not dist.is_available():
@@ -211,7 +211,11 @@ def is_main_process():
 def save_on_master(*args, **kwargs):
     if is_main_process():
         torch.save(*args, **kwargs)
-
+        
+def block_print():
+    if(get_rank() != 0):
+        sys.stdout = open(os.devnull, 'w')
+        
 
 def init_distributed_mode(args):
     if args.dist_on_itp:
@@ -232,7 +236,7 @@ def init_distributed_mode(args):
         args.gpu = args.rank % torch.cuda.device_count()
     else:
         print('Not using distributed mode')
-        setup_for_distributed(is_master=True)  # hack
+        # setup_for_distributed(True)  # hack
         args.distributed = False
         return
 
@@ -244,8 +248,9 @@ def init_distributed_mode(args):
         args.rank, args.dist_url, args.gpu), flush=True)
     torch.distributed.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
                                          world_size=args.world_size, rank=args.rank)
+    block_print()
     torch.distributed.barrier()
-    setup_for_distributed(args.rank == 0)
+    # setup_for_distributed(args.rank == 0)
 
 
 class NativeScalerWithGradNormCount:
